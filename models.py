@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List, Dict, Any
 from fastapi import UploadFile
 
 
@@ -56,3 +56,45 @@ class ImageInfoResponse(BaseModel):
 class ImageListResponse(BaseModel):
     images: list[ImageInfoResponse] = Field(description="图像文件列表")
     count: int = Field(description="图像文件总数")
+
+
+class LoraInfo(BaseModel):
+    name: str = Field(description="LoRA 模型名称")
+    strength: float = Field(default=1.0, ge=0.0, le=2.0, description="LoRA 强度 (0-2)")
+
+
+class TextToImageRequest(BaseModel):
+    prompt: str = Field(description="正向提示词")
+    negative_prompt: Optional[str] = Field(default="", description="负向提示词")
+    width: int = Field(default=512, ge=64, le=2048, description="图像宽度（像素）")
+    height: int = Field(default=512, ge=64, le=2048, description="图像高度（像素）")
+    steps: int = Field(default=20, ge=1, le=150, description="采样步数")
+    seed: Optional[int] = Field(
+        default=None, description="随机种子（不指定则自动生成）"
+    )
+    cfg_scale: float = Field(default=7.5, ge=1.0, le=30.0, description="CFG 引导强度")
+    sampler_name: Optional[str] = Field(default=None, description="采样器名称")
+    scheduler: Optional[str] = Field(default=None, description="调度器名称")
+    checkpoint: str = Field(description="模型检查点名称")
+    loras: Optional[List[LoraInfo]] = Field(default=None, description="LoRA 列表")
+    workflow: Dict[str, Any] = Field(description="ComfyUI 工作流 JSON")
+
+
+class ImageToImageRequest(BaseModel):
+    prompt: str = Field(description="正向提示词")
+    negative_prompt: Optional[str] = Field(default="", description="负向提示词")
+    width: int = Field(default=512, ge=64, le=2048, description="图像宽度（像素）")
+    height: int = Field(default=512, ge=64, le=2048, description="图像高度（像素）")
+    steps: int = Field(default=20, ge=1, le=150, description="采样步数")
+    seed: Optional[int] = Field(
+        default=None, description="随机种子（不指定则自动生成）"
+    )
+    cfg_scale: float = Field(default=7.5, ge=1.0, le=30.0, description="CFG 引导强度")
+    sampler_name: Optional[str] = Field(default=None, description="采样器名称")
+    scheduler: Optional[str] = Field(default=None, description="调度器名称")
+    checkpoint: str = Field(description="模型检查点名称")
+    loras: Optional[List[LoraInfo]] = Field(default=None, description="LoRA 列表")
+    workflow: Dict[str, Any] = Field(description="ComfyUI 工作流 JSON")
+    strength: float = Field(
+        default=0.75, ge=0.0, le=1.0, description="图生图变换强度 (0-1)"
+    )

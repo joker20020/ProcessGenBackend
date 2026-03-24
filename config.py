@@ -24,6 +24,11 @@ class AppConfig(BaseSettings):
         default=10 * 1024 * 1024, description="最大上传文件大小 (字节)"
     )
 
+    comfyui_url: str = Field(
+        default="http://127.0.0.1:8188", description="ComfyUI 服务地址"
+    )
+    comfyui_timeout: int = Field(default=300, description="ComfyUI 请求超时时间（秒）")
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

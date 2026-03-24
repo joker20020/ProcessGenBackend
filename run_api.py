@@ -23,18 +23,5 @@ if __name__ == "__main__":
         port=config.api_port,
         log_level=config.log_level.lower(),
         access_log=True,
-    )
-logger = logging.getLogger(__name__)
-
-if __name__ == "__main__":
-    logger.info(
-        f"Starting ProcessGen Model Server on {config.api_host}:{config.api_port}"
-    )
-
-    uvicorn.run(
-        "api:app",
-        host=config.api_host,
-        port=config.api_port,
-        log_level=config.log_level.lower(),
-        access_log=True,
+        reload=True,
     )

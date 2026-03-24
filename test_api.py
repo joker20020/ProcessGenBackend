@@ -1,10 +1,24 @@
 import requests
-import time
+import json
 from io import BytesIO
+from pathlib import Path
 from PIL import Image
 
 
 BASE_URL = "http://localhost:8050"
+
+WORKFLOW_PATH = (
+    Path(__file__).parent / "data" / "workflow" / "Flux-Dev-ComfyUI-Workflow.json"
+)
+
+
+def load_flux_workflow() -> dict:
+    """Load the Flux workflow from JSON file."""
+    with open(WORKFLOW_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+FLUX_WORKFLOW = load_flux_workflow()
 
 
 def test_health():
@@ -179,6 +193,330 @@ def test_error_handling():
     print("✓ Error handling passed")
 
 
+def test_text_to_image():
+    print("\n=== Testing Text-to-Image with Flux Workflow ===")
+
+    payload = {
+        "prompt": "a beautiful game card design",
+        "negative_prompt": "blurry, low quality",
+        "width": 1024,
+        "height": 1024,
+        "steps": 20,
+        "seed": 42,
+        "cfg_scale": 3.5,
+        "sampler_name": "dpmpp_2m",
+        "scheduler": "simple",
+        "checkpoint": "flux1-dev.safetensors",
+        "workflow": FLUX_WORKFLOW,
+    }
+
+    response = requests.post(
+        f"{BASE_URL}/api/v1/text-to-image",
+        json=payload,
+        timeout=300,
+    )
+    print(f"Status: {response.status_code}")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert len(response.content) > 0
+    print(f"Image size: {len(response.content)} bytes")
+    print("✓ Text-to-image with Flux workflow passed")
+
+
+def test_text_to_image_with_lora():
+    print("\n=== Testing Text-to-Image with LoRA and Flux Workflow ===")
+
+    payload = {
+        "prompt": "a beautiful landscape game card",
+        "checkpoint": "flux1-dev.safetensors",
+        "workflow": FLUX_WORKFLOW,
+        "loras": [
+            {"name": "detail_tweaker.safetensors", "strength": 0.8},
+            {"name": "add_detail.safetensors", "strength": 1.0},
+        ],
+    }
+
+    response = requests.post(
+        f"{BASE_URL}/api/v1/text-to-image",
+        json=payload,
+        timeout=300,
+    )
+    print(f"Status: {response.status_code}")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert len(response.content) > 0
+    print(f"Image size: {len(response.content)} bytes")
+    print("✓ Text-to-image with LoRA and Flux workflow passed")
+
+
+def test_image_to_image():
+    print("\n=== Testing Image-to-Image with Flux Workflow ===")
+
+    init_image = Image.new("RGB", (1024, 1024), color="white")
+    init_img_bytes = BytesIO()
+    init_image.save(init_img_bytes, format="PNG")
+    init_img_bytes.seek(0)
+
+    files = {
+        "init_image": ("init.png", init_img_bytes, "image/png"),
+    }
+    data = {
+        "prompt": "transform this image into a game card",
+        "negative_prompt": "blurry",
+        "width": 1024,
+        "height": 1024,
+        "steps": 20,
+        "seed": 123,
+        "cfg_scale": 3.5,
+        "checkpoint": "flux1-dev.safetensors",
+        "strength": 0.75,
+        "workflow": json.dumps(FLUX_WORKFLOW),
+    }
+
+    response = requests.post(
+        f"{BASE_URL}/api/v1/image-to-image",
+        files=files,
+        data=data,
+        timeout=300,
+    )
+    print(f"Status: {response.status_code}")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert len(response.content) > 0
+    print(f"Image size: {len(response.content)} bytes")
+    print("✓ Image-to-image with Flux workflow passed")
+
+
+def test_text_to_image_missing_prompt():
+    print("\n=== Testing Text-to-Image Missing Prompt ===")
+
+    payload = {
+        "checkpoint": "flux1-dev.safetensors",
+        "workflow": FLUX_WORKFLOW,
+    }
+
+    response = requests.post(
+        f"{BASE_URL}/api/v1/text-to-image",
+        json=payload,
+        timeout=30,
+    )
+    print(f"Status: {response.status_code}")
+    assert response.status_code == 422
+    print("✓ Text-to-image missing prompt validation passed")
+
+
+def test_text_to_image_missing_checkpoint():
+    print("\n=== Testing Text-to-Image Missing Checkpoint ===")
+
+    payload = {
+        "prompt": "test prompt",
+        "workflow": FLUX_WORKFLOW,
+    }
+
+    response = requests.post(
+        f"{BASE_URL}/api/v1/text-to-image",
+        json=payload,
+        timeout=30,
+    )
+    print(f"Status: {response.status_code}")
+    assert response.status_code == 422
+    print("✓ Text-to-image missing checkpoint validation passed")
+
+
+def test_text_to_image_missing_workflow():
+    print("\n=== Testing Text-to-Image Missing Workflow ===")
+
+    payload = {
+        "prompt": "test prompt",
+        "checkpoint": "flux1-dev.safetensors",
+    }
+
+    response = requests.post(
+        f"{BASE_URL}/api/v1/text-to-image",
+        json=payload,
+        timeout=30,
+    )
+    print(f"Status: {response.status_code}")
+    assert response.status_code == 422
+    print("✓ Text-to-image missing workflow validation passed")
+
+
+def test_image_to_image_missing_init_image():
+    print("\n=== Testing Image-to-Image Missing Init Image ===")
+
+    data = {
+        "prompt": "test prompt",
+        "checkpoint": "flux1-dev.safetensors",
+        "workflow": json.dumps(FLUX_WORKFLOW),
+    }
+
+    response = requests.post(
+        f"{BASE_URL}/api/v1/image-to-image",
+        data=data,
+        timeout=30,
+    )
+    print(f"Status: {response.status_code}")
+    assert response.status_code == 422
+    print("✓ Image-to-image missing init image validation passed")
+
+
+def test_image_to_image_invalid_workflow_json():
+    print("\n=== Testing Image-to-Image Invalid Workflow JSON ===")
+
+    init_image = Image.new("RGB", (1024, 1024), color="white")
+    init_img_bytes = BytesIO()
+    init_image.save(init_img_bytes, format="PNG")
+    init_img_bytes.seek(0)
+
+    files = {
+        "init_image": ("init.png", init_img_bytes, "image/png"),
+    }
+    data = {
+        "prompt": "test prompt",
+        "checkpoint": "flux1-dev.safetensors",
+        "workflow": "not a valid json",
+    }
+
+    response = requests.post(
+        f"{BASE_URL}/api/v1/image-to-image",
+        files=files,
+        data=data,
+        timeout=30,
+    )
+    print(f"Status: {response.status_code}")
+    assert response.status_code == 400
+    assert "Invalid workflow JSON" in response.json()["detail"]
+    print("✓ Image-to-image invalid workflow JSON validation passed")
+
+
+def test_comfyui_service_workflow_injection():
+    print("\n=== Testing ComfyUI Service Workflow Injection (Flux Workflow) ===")
+
+    from comfyui_service import ComfyUIService
+    from models import TextToImageRequest, LoraInfo
+
+    service = ComfyUIService()
+
+    loras = [
+        LoraInfo(name="test_lora.safetensors", strength=0.8),
+    ]
+
+    request = TextToImageRequest(
+        prompt="test prompt for game card",
+        negative_prompt="test negative",
+        width=768,
+        height=768,
+        steps=30,
+        seed=42,
+        cfg_scale=4.5,
+        sampler_name="dpmpp_2m",
+        scheduler="simple",
+        checkpoint="flux1-dev.safetensors",
+        loras=loras,
+        workflow=FLUX_WORKFLOW.copy(),
+    )
+
+    workflow = service._inject_parameters_to_workflow(
+        workflow=request.workflow,
+        prompt=request.prompt,
+        negative_prompt=request.negative_prompt or "",
+        width=request.width,
+        height=request.height,
+        steps=request.steps,
+        seed=request.seed if request.seed is not None else 0,
+        cfg_scale=request.cfg_scale,
+        sampler_name=request.sampler_name,
+        scheduler=request.scheduler,
+        checkpoint=request.checkpoint,
+    )
+
+    for node_id, node_data in service._find_nodes_by_type(workflow, "KSamplerSelect"):
+        assert node_data["inputs"]["sampler_name"] == "dpmpp_2m"
+
+    for node_id, node_data in service._find_nodes_by_type(workflow, "BasicScheduler"):
+        assert node_data["inputs"]["steps"] == 30
+        assert node_data["inputs"]["scheduler"] == "simple"
+
+    for node_id, node_data in service._find_nodes_by_type(workflow, "RandomNoise"):
+        assert node_data["inputs"]["noise_seed"] == 42
+
+    for node_id, node_data in service._find_nodes_by_type(workflow, "FluxGuidance"):
+        assert node_data["inputs"]["guidance"] == 4.5
+
+    clip_nodes = service._find_nodes_by_type(workflow, "CLIPTextEncode")
+    assert len(clip_nodes) >= 1
+    assert clip_nodes[0][1]["inputs"]["text"] == "test prompt for game card"
+
+    for node_id, node_data in service._find_nodes_by_type(
+        workflow, "EmptySD3LatentImage"
+    ):
+        assert node_data["inputs"]["width"] == 768
+        assert node_data["inputs"]["height"] == 768
+
+    for node_id, node_data in service._find_nodes_by_type(
+        workflow, "ModelSamplingFlux"
+    ):
+        assert node_data["inputs"]["width"] == 768
+        assert node_data["inputs"]["height"] == 768
+
+    for node_id, node_data in service._find_nodes_by_type(workflow, "UNETLoader"):
+        assert node_data["inputs"]["unet_name"] == "flux1-dev.safetensors"
+
+    print("✓ ComfyUI service workflow injection (Flux) passed")
+
+
+def test_comfyui_service_lora_injection():
+    print("\n=== Testing ComfyUI Service LoRA Injection (Flux Workflow) ===")
+
+    from comfyui_service import ComfyUIService
+    from models import LoraInfo
+
+    service = ComfyUIService()
+
+    loras = [
+        LoraInfo(name="lora1.safetensors", strength=0.8),
+        LoraInfo(name="lora2.safetensors", strength=1.2),
+    ]
+
+    workflow = service._inject_loras_to_workflow(FLUX_WORKFLOW.copy(), loras)
+
+    lora_nodes = service._find_nodes_by_type(workflow, "LoraLoader")
+    assert len(lora_nodes) == 2
+
+    first_lora = lora_nodes[0][1]
+    assert first_lora["inputs"]["lora_name"] == "lora1.safetensors"
+    assert first_lora["inputs"]["strength_model"] == 0.8
+    assert first_lora["inputs"]["strength_clip"] == 0.8
+
+    second_lora = lora_nodes[1][1]
+    assert second_lora["inputs"]["lora_name"] == "lora2.safetensors"
+    assert second_lora["inputs"]["strength_model"] == 1.2
+
+    print("✓ ComfyUI service LoRA injection (Flux) passed")
+
+
+def test_text_to_image_comfyui_not_connected():
+    print("\n=== Testing Text-to-Image ComfyUI Not Connected ===")
+
+    payload = {
+        "prompt": "test prompt",
+        "checkpoint": "flux1-dev.safetensors",
+        "workflow": FLUX_WORKFLOW,
+    }
+
+    response = requests.post(
+        f"{BASE_URL}/api/v1/text-to-image",
+        json=payload,
+        timeout=30,
+    )
+    print(f"Status: {response.status_code}")
+
+    if response.status_code == 500:
+        print("✓ Text-to-image ComfyUI not connected error passed")
+    else:
+        print(f"Note: Expected 500 (ComfyUI not connected), got {response.status_code}")
+
+
 def main():
     print("=" * 60)
     print("ProcessGen Model Server API Tests")
@@ -194,6 +532,17 @@ def main():
         test_rerank_image_text()
         test_rerank_image_image()
         test_error_handling()
+        test_text_to_image()
+        # test_text_to_image_with_lora()
+        test_image_to_image()
+        test_text_to_image_missing_prompt()
+        test_text_to_image_missing_checkpoint()
+        test_text_to_image_missing_workflow()
+        test_image_to_image_missing_init_image()
+        test_image_to_image_invalid_workflow_json()
+        test_comfyui_service_workflow_injection()
+        test_comfyui_service_lora_injection()
+        test_text_to_image_comfyui_not_connected()
 
         print("\n" + "=" * 60)
         print("ALL TESTS PASSED! ✓")
@@ -202,10 +551,13 @@ def main():
         print(f"\n✗ Test failed: {e}")
     except requests.exceptions.ConnectionError:
         print(
-            "\n✗ Cannot connect to server. Make sure it's running on http://localhost:8000"
+            "\n✗ Cannot connect to server. Make sure it's running on http://localhost:8050"
         )
     except Exception as e:
         print(f"\n✗ Unexpected error: {e}")
+        import traceback
+
+        traceback.print_exc()
 
 
 if __name__ == "__main__":

@@ -7,7 +7,7 @@ from typing import Optional
 from pathlib import Path
 from fastapi import FastAPI, File, Form, UploadFile, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, Response
 from PIL import Image
 
 from config import config
@@ -20,9 +20,12 @@ from models import (
     ErrorResponse,
     ImageInfoResponse,
     ImageListResponse,
+    TextToImageRequest,
+    ImageToImageRequest,
 )
 from embeddings import EmbeddingService
 from rerank import RerankService
+from comfyui_service import ComfyUIService
 
 logging.basicConfig(
     level=getattr(logging, config.log_level),
@@ -46,6 +49,7 @@ app.add_middleware(
 
 embedding_service = EmbeddingService()
 rerank_service = RerankService()
+comfyui_service = ComfyUIService()
 
 DATA_DIR = Path("data").resolve()
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff"}
@@ -342,6 +346,102 @@ async def rerank(
         return RerankResponse(score=score)
     except Exception as e:
         logger.error(f"Rerank error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/text-to-image")
+async def text_to_image(request: TextToImageRequest):
+    """文生图接口：根据文本提示词生成图片"""
+    if not request.prompt:
+        raise HTTPException(status_code=400, detail="prompt is required")
+    if not request.checkpoint:
+        raise HTTPException(status_code=400, detail="checkpoint is required")
+    if not request.workflow:
+        raise HTTPException(status_code=400, detail="workflow is required")
+
+    try:
+        image_bytes = await comfyui_service.generate_text_to_image(request)
+        if image_bytes is None:
+            raise HTTPException(
+                status_code=500, detail="Failed to generate image or timeout"
+            )
+        return Response(content=image_bytes, media_type="image/png")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Text-to-image error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/image-to-image")
+async def image_to_image(
+    prompt: str = Form(...),
+    negative_prompt: str = Form(""),
+    width: int = Form(512),
+    height: int = Form(512),
+    steps: int = Form(20),
+    seed: Optional[int] = Form(None),
+    cfg_scale: float = Form(7.5),
+    sampler_name: Optional[str] = Form(None),
+    scheduler: Optional[str] = Form(None),
+    checkpoint: str = Form(...),
+    strength: float = Form(0.75),
+    workflow: str = Form(...),
+    init_image: UploadFile = File(...),
+    loras: Optional[str] = Form(None),
+):
+    """图生图接口：基于参考图生成新图片"""
+    import json
+
+    if not prompt:
+        raise HTTPException(status_code=400, detail="prompt is required")
+    if not checkpoint:
+        raise HTTPException(status_code=400, detail="checkpoint is required")
+    if not init_image:
+        raise HTTPException(status_code=400, detail="init_image is required")
+
+    try:
+        workflow_dict = json.loads(workflow)
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid workflow JSON: {e}")
+
+    loras_list = None
+    if loras:
+        try:
+            loras_list = json.loads(loras)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Invalid loras JSON")
+
+    try:
+        image_data = await init_image.read()
+        pil_image = Image.open(BytesIO(image_data))
+
+        request = ImageToImageRequest(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            width=width,
+            height=height,
+            steps=steps,
+            seed=seed,
+            cfg_scale=cfg_scale,
+            sampler_name=sampler_name,
+            scheduler=scheduler,
+            checkpoint=checkpoint,
+            loras=loras_list,
+            workflow=workflow_dict,
+            strength=strength,
+        )
+
+        image_bytes = await comfyui_service.generate_image_to_image(request, pil_image)
+        if image_bytes is None:
+            raise HTTPException(
+                status_code=500, detail="Failed to generate image or timeout"
+            )
+        return Response(content=image_bytes, media_type="image/png")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Image-to-image error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 

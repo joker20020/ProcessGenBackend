@@ -9,10 +9,10 @@ class AppConfig(BaseSettings):
         default="INFO", description="日志级别 (DEBUG, INFO, WARNING, ERROR)"
     )
     embedding_model_name: str = Field(
-        default="Alibaba-NLP/gme-Qwen2-VL-2B-Instruct", description="嵌入模型名称或路径"
+        default="Qwen/Qwen3-VL-Embedding-2B", description="嵌入模型名称或路径"
     )
     rerank_model_name: str = Field(
-        default="jinaai/jina-reranker-m0", description="重排模型名称或路径"
+        default="Qwen/Qwen3-VL-Reranker-2B", description="重排模型名称或路径"
     )
     embedding_device: str = Field(
         default="cuda:1", description="嵌入模型运行设备 (cuda:0, cpu)"

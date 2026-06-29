@@ -281,7 +281,7 @@ curl -X POST "http://localhost:8050/api/v1/rerank" \
 
 ```http
 POST /api/v1/text-to-image
-Content-Type: application/json
+Content-Type: application/json```
 ```
 
 **请求体:**

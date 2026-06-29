@@ -1,7 +1,7 @@
 import asyncio
 from typing import Optional
 from PIL import Image
-from sentence_transformers import SentenceTransformer  # 替换原 AutoModel
+from transformers import AutoModel
 from config import config
 
 
@@ -15,46 +15,40 @@ class EmbeddingService:
 
     def __init__(self):
         if not hasattr(self, "_initialized"):
-            # 加载新模型，支持文本、图像、文本+图像的统一编码
-            self.model = SentenceTransformer(
+            self.model = AutoModel.from_pretrained(
                 config.embedding_model_name,
-                device=config.embedding_device,
+                torch_dtype="float32",
+                device_map=config.embedding_device,
                 trust_remote_code=True,
-                model_kwargs={"torch_dtype": "float32"},
             )
             self._initialized = True
 
     async def get_text_embedding(self, text: str) -> list[float]:
-        """获取纯文本的向量"""
         loop = asyncio.get_event_loop()
         embeddings = await loop.run_in_executor(
-            None, lambda: self.model.encode([text])
+            None, lambda: self.model.get_text_embeddings(texts=[text], is_query=True)
         )
         return embeddings[0].tolist()
 
     async def get_image_embedding(self, image: Image.Image) -> list[float]:
-        """获取纯图像的向量"""
         loop = asyncio.get_event_loop()
         embeddings = await loop.run_in_executor(
-            None, lambda: self.model.encode([image])
+            None, lambda: self.model.get_image_embeddings(images=[image], is_query=True)
         )
         return embeddings[0].tolist()
 
     async def get_fused_embedding(self, text: str, image: Image.Image) -> list[float]:
-        """获取文本+图像融合的向量"""
         loop = asyncio.get_event_loop()
-        # 传入 {"text": ..., "image": ...} 字典，模型自动进行多模态融合
-        input_data = {"text": text, "image": image}
         embeddings = await loop.run_in_executor(
-            None, lambda: self.model.encode([input_data])
+            None,
+            lambda: self.model.get_fused_embeddings(
+                images=[image], texts=[text], is_query=True
+            ),
         )
         return embeddings[0].tolist()
 
     def get_dimension(self) -> int:
-        """返回向量维度"""
-        return self.model.get_embedding_dimension()
+        return self.model.config.hidden_size
 
     def is_loaded(self) -> bool:
-        """检查模型是否已加载"""
         return hasattr(self, "_initialized") and self._initialized
-    

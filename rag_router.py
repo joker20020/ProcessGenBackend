@@ -1,3 +1,4 @@
+import re
 import time
 import logging
 from pathlib import Path
@@ -30,6 +31,16 @@ TEXT_DIR = Path("data/text").resolve()
 IMAGE_DIR = Path("data/images").resolve()
 ALLOWED_TEXT_EXT = {".md", ".txt", ".pdf"}
 ALLOWED_IMAGE_EXT = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".tiff"}
+
+_SUBJECT_RE = re.compile(r"^[A-Za-z0-9_\-一-鿿]+$")
+
+
+def _validate_subject(subject: Optional[str]) -> Optional[str]:
+    if subject is None:
+        return None
+    if not _SUBJECT_RE.fullmatch(subject):
+        raise HTTPException(status_code=400, detail="subject 仅允许字母、数字、下划线、连字符及中文")
+    return subject
 
 
 def _ensure_milvus():
@@ -141,6 +152,11 @@ async def add_images(
     if not images:
         raise HTTPException(status_code=400, detail="至少上传一张图片")
 
+    exts = [Path(f.filename or ".png").suffix.lower() for f in images]
+    for ext in exts:
+        if ext not in ALLOWED_IMAGE_EXT:
+            raise HTTPException(status_code=400, detail=f"不支持图像类型 {ext}")
+
     save_dir = IMAGE_DIR.joinpath(name)
     save_dir.mkdir(parents=True, exist_ok=True)
     ts = int(time.time())
@@ -148,9 +164,7 @@ async def add_images(
     subj = subject or config.rag_subject_default
     data = []
     for i, (img_file, desc) in enumerate(zip(images, descriptions)):
-        ext = Path(img_file.filename or ".png").suffix.lower()
-        if ext not in ALLOWED_IMAGE_EXT:
-            raise HTTPException(status_code=400, detail=f"不支持图像类型 {ext}")
+        ext = exts[i]
         raw = await img_file.read()
         save_path = save_dir.joinpath(f"{ts}_{i}{ext}")
         save_path.write_bytes(raw)
@@ -192,6 +206,7 @@ async def search_text(
     svc = _ensure_milvus()
     if not svc.client.has_collection(collection_name=name):
         raise HTTPException(status_code=404, detail=f"集合 {name} 不存在")
+    subject = _validate_subject(subject)
     emb = EmbeddingService()
     vec = await emb.get_text_embedding(query)
     raw = svc.search(name, vec, limit=limit, subject=subject)
@@ -208,6 +223,7 @@ async def search_image(
     svc = _ensure_milvus()
     if not svc.client.has_collection(collection_name=name):
         raise HTTPException(status_code=404, detail=f"集合 {name} 不存在")
+    subject = _validate_subject(subject)
     raw = await image.read()
     pil = Image.open(BytesIO(raw))
     emb = EmbeddingService()

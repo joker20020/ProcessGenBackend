@@ -11,7 +11,6 @@ from workers import ApiWorker
 class _ResultWidget(QWidget):
     def __init__(self, item: dict, client: BackendClient, parent=None):
         super().__init__(parent)
-        from PySide6.QtWidgets import QHBoxLayout
         layout = QHBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
         self.thumb = QLabel()
@@ -111,9 +110,10 @@ class SearchPage(QWidget):
         items = r.get("results", [])
         for it in items:
             wi = QListWidgetItem()
-            wi.setSizeHint(_ResultWidget(it, self.client).sizeHint())
+            widget = _ResultWidget(it, self.client)
+            wi.setSizeHint(widget.sizeHint())
             self.results.addItem(wi)
-            self.results.setItemWidget(wi, _ResultWidget(it, self.client))
+            self.results.setItemWidget(wi, widget)
         self.status.setText(f"返回 {len(items)} 条")
 
     def _on_err(self, msg):

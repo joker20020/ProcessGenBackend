@@ -12,5 +12,7 @@ wheels/
 .sisyphus/
 .ruff_cache/
 .refrance/
+.superpowers/
 
 data/
+.env

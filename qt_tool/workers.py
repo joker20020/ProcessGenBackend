@@ -25,6 +25,12 @@ class ApiWorker(QRunnable):
     def run(self):
         try:
             result = self.fn(*self.args, **self.kwargs)
-            self.signals.finished.emit(result)
+            try:
+                self.signals.finished.emit(result)
+            except RuntimeError:
+                pass
         except Exception as e:
-            self.signals.failed.emit(str(e))
+            try:
+                self.signals.failed.emit(str(e))
+            except RuntimeError:
+                pass

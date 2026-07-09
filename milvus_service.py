@@ -10,6 +10,14 @@ from models import CollectionInfo
 logger = logging.getLogger(__name__)
 
 
+def _is_loaded(load_state) -> bool:
+    """将 Milvus get_load_state 返回值统一转换为 bool。"""
+    if isinstance(load_state, dict):
+        state_value = load_state.get("state")
+        return getattr(state_value, "name", state_value) == "Loaded"
+    return getattr(load_state, "name", load_state) == "Loaded"
+
+
 class MilvusService:
     _instance: Optional["MilvusService"] = None
 
@@ -33,7 +41,7 @@ class MilvusService:
 
     def init_collection(self, name: str) -> bool:
         if self.client.has_collection(collection_name=name):
-            return self.client.get_load_state(collection_name=name)
+            return _is_loaded(self.client.get_load_state(collection_name=name))
 
         dim = EmbeddingService().get_dimension()
         schema = self.client.create_schema(auto_id=True, enable_dynamic_field=True)
@@ -51,7 +59,7 @@ class MilvusService:
         self.client.create_collection(
             collection_name=name, schema=schema, index_params=index_params
         )
-        return self.client.get_load_state(collection_name=name)
+        return _is_loaded(self.client.get_load_state(collection_name=name))
 
     def list_collections(self) -> list[CollectionInfo]:
         result = []
@@ -61,7 +69,7 @@ class MilvusService:
             try:
                 stats = self.client.get_collection_stats(collection_name=name)
                 row_count = stats.get("row_count")
-                loaded = self.client.get_load_state(collection_name=name)
+                loaded = _is_loaded(self.client.get_load_state(collection_name=name))
             except Exception as e:
                 logger.warning(f"读取集合 {name} 统计失败: {e}")
             result.append(CollectionInfo(name=name, row_count=row_count, loaded=loaded))
@@ -72,7 +80,9 @@ class MilvusService:
             self.client.drop_collection(collection_name=name)
 
     def insert(self, name: str, data: list[dict]) -> list:
-        return self.client.insert(collection_name=name, data=data)
+        result = self.client.insert(collection_name=name, data=data)
+        self.client.flush(collection_name=name)
+        return result
 
     def search(
         self, name: str, vector: list[float], limit: int = 10, subject: Optional[str] = None

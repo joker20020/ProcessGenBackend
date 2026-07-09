@@ -98,3 +98,49 @@ class ImageToImageRequest(BaseModel):
     strength: float = Field(
         default=0.75, ge=0.0, le=1.0, description="图生图变换强度 (0-1)"
     )
+
+
+class CreateCollectionRequest(BaseModel):
+    collection_name: str = Field(description="集合名称")
+
+
+class CollectionInfo(BaseModel):
+    name: str = Field(description="集合名称")
+    row_count: Optional[int] = Field(default=None, description="实体数")
+    loaded: Optional[bool] = Field(default=None, description="是否已加载")
+
+
+class CollectionListResponse(BaseModel):
+    collections: list[CollectionInfo] = Field(description="集合列表")
+    count: int = Field(description="集合总数")
+
+
+class AddTextResponse(BaseModel):
+    status: str = Field(description="状态")
+    collection_name: str = Field(description="集合名称")
+    chunks_inserted: int = Field(description="插入的文本块数")
+    saved_path: str = Field(description="保存的源文件绝对路径")
+
+
+class AddImageResponse(BaseModel):
+    status: str = Field(description="状态")
+    collection_name: str = Field(description="集合名称")
+    images_inserted: int = Field(description="插入的图像数")
+
+
+class SearchResultItem(BaseModel):
+    id: int = Field(description="实体ID")
+    score: float = Field(description="相似度分数")
+    type: str = Field(description="text / image")
+    text: str = Field(description="文本块内容或图像描述")
+    path: str = Field(description="源文件绝对路径")
+    subject: str = Field(description="分区标签")
+    asset_path: Optional[str] = Field(
+        default=None, description="相对 data/ 的路径，用于取图（图片结果有值）"
+    )
+
+
+class SearchResponse(BaseModel):
+    collection_name: str = Field(description="集合名称")
+    query_type: str = Field(description="查询类型: text / image")
+    results: list[SearchResultItem] = Field(description="检索结果，按相似度排序")

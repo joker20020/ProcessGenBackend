@@ -1,7 +1,7 @@
-from PySide6.QtCore import Qt, QThreadPool
+from PySide6.QtCore import QThreadPool
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QListWidget, QListWidgetItem,
-    QStackedWidget, QLabel, QPushButton, QComboBox, QMessageBox,
+    QStackedWidget, QLabel, QPushButton, QComboBox,
 )
 from backend_client import BackendClient
 from config import load_config, save_config

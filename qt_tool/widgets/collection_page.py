@@ -1,9 +1,9 @@
-from PySide6.QtCore import Qt, QThreadPool, Signal
+from PySide6.QtCore import QThreadPool, Signal
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLineEdit,
     QTableWidget, QTableWidgetItem, QLabel, QMessageBox,
 )
-from backend_client import BackendClient, BackendError
+from backend_client import BackendClient
 from workers import ApiWorker
 
 

@@ -29,6 +29,13 @@ class AppConfig(BaseSettings):
     )
     comfyui_timeout: int = Field(default=300, description="ComfyUI 请求超时时间（秒）")
 
+    milvus_uri: str = Field(
+        default="http://localhost:19530", description="Milvus 服务器地址"
+    )
+    rag_subject_default: str = Field(
+        default="capp", description="RAG 默认 subject 分区标签"
+    )
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

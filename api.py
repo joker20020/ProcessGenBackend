@@ -26,6 +26,7 @@ from models import (
 from embeddings import EmbeddingService
 from rerank import RerankService
 from comfyui_service import ComfyUIService
+from rag_router import router as rag_router
 
 logging.basicConfig(
     level=getattr(logging, config.log_level),
@@ -38,6 +39,8 @@ app = FastAPI(
     description="多模态嵌入和重排模型服务器",
     version="1.0.0",
 )
+
+app.include_router(rag_router)
 
 app.add_middleware(
     CORSMiddleware,

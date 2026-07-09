@@ -273,6 +273,130 @@ curl -X POST "http://localhost:8050/api/v1/rerank" \
 
 ---
 
+### 向量数据库服务 (RAG)
+
+> **注意**: 需先启动 Milvus 服务并配置 `MILVUS_URI`
+
+#### 创建集合
+
+```http
+POST /api/v1/rag/collections
+Content-Type: application/json
+```
+
+**请求体:**
+
+```json
+{"collection_name": "capp"}
+```
+
+**响应示例:**
+
+```json
+{"name": "capp", "row_count": null, "loaded": true}
+```
+
+#### 列出集合
+
+```http
+GET /api/v1/rag/collections
+```
+
+**响应示例:**
+
+```json
+{"collections": [{"name": "capp", "row_count": 12, "loaded": true}], "count": 1}
+```
+
+#### 删除集合
+
+```http
+DELETE /api/v1/rag/collections/{name}
+```
+
+删除集合及其 `data/text/{name}` 与 `data/images/{name}` 目录。
+
+#### 添加文本
+
+```http
+POST /api/v1/rag/collections/{name}/text
+Content-Type: multipart/form-data
+```
+
+**参数:**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `file` | file | 是 | `.md` / `.txt` / `.pdf` 文件 |
+| `subject` | string | 否 | 分区标签，默认 `RAG_SUBJECT_DEFAULT` |
+
+**响应示例:**
+
+```json
+{"status": "success", "collection_name": "capp", "chunks_inserted": 5, "saved_path": "/abs/data/text/capp/1234.md"}
+```
+
+#### 添加图像
+
+```http
+POST /api/v1/rag/collections/{name}/images
+Content-Type: multipart/form-data
+```
+
+**参数:**
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `images` | file[] | 是 | 可重复多个图像文件 |
+| `descriptions` | string[] | 是 | 与图片一一对应的描述 |
+| `subject` | string | 否 | 分区标签 |
+
+描述非空走融合嵌入，为空走纯图像嵌入。
+
+**响应示例:**
+
+```json
+{"status": "success", "collection_name": "capp", "images_inserted": 2}
+```
+
+#### 检索（文本）
+
+```http
+GET /api/v1/rag/collections/{name}/search?query=文本&limit=10&subject=capp
+```
+
+#### 检索（图像）
+
+```http
+POST /api/v1/rag/collections/{name}/search
+Content-Type: multipart/form-data
+```
+
+**参数:** `image`(file)、`limit`(int)、`subject`(string 可选)
+
+**响应示例（文本/图像检索通用）:**
+
+```json
+{
+  "collection_name": "capp",
+  "query_type": "text",
+  "results": [
+    {"id": 1, "score": 0.82, "type": "text", "text": "...", "path": "/abs/...", "subject": "capp", "asset_path": null},
+    {"id": 2, "score": 0.71, "type": "image", "text": "描述", "path": "/abs/...", "subject": "capp", "asset_path": "images/capp/1_0.png"}
+  ]
+}
+```
+
+#### 取图资源
+
+```http
+GET /api/v1/rag/asset?path=images/capp/1_0.png
+```
+
+返回图像文件（`image/<ext>`），`path` 必须为相对 `data/` 的安全路径，越界返回 403。
+
+---
+
 ### 图像生成服务 (ComfyUI)
 
 > **注意**: 图像生成功能需要先启动 ComfyUI 服务
@@ -417,12 +541,27 @@ ProcessGenBackend/
 ├── embeddings.py       # 嵌入服务实现
 ├── rerank.py           # 重排服务实现
 ├── comfyui_service.py  # ComfyUI 集成服务
+├── rag_router.py       # /api/v1/rag/* 向量库端点
+├── milvus_service.py   # Milvus 单例服务
+├── text_processor.py   # Markdown/PDF 分块
 ├── test_api.py         # 测试套件
 ├── pyproject.toml      # 项目依赖配置
 ├── .env.example        # 环境变量模板
 └── data/               # 图像存储目录
     └── workflow/       # ComfyUI 工作流文件
 ```
+
+### Qt 客户端
+
+`qt_tool/` 为独立 PySide6 客户端，通过 HTTP 调用上述后端操作向量库。运行：
+
+```bash
+cd qt_tool
+pip install -r requirements.txt
+python main.py
+```
+
+首次运行会在 `~/.moyu_processgen_ui/config.json` 保存后端地址，可在界面"设置"中修改。
 
 ---
 

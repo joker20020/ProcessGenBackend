@@ -14,6 +14,9 @@ WORKFLOW_PATH = (
 
 def load_flux_workflow() -> dict:
     """Load the Flux workflow from JSON file."""
+    if not WORKFLOW_PATH.exists():
+        print(f"Warning: workflow file not found at {WORKFLOW_PATH}, using empty workflow")
+        return {}
     with open(WORKFLOW_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
 
@@ -517,6 +520,70 @@ def test_text_to_image_comfyui_not_connected():
         print(f"Note: Expected 500 (ComfyUI not connected), got {response.status_code}")
 
 
+def test_rag_collections_lifecycle():
+    print("\n=== Testing RAG Collections Lifecycle ===")
+    name = f"qt_test_{int(__import__('time').time())}"
+    # 创建
+    r = requests.post(f"{BASE_URL}/api/v1/rag/collections", json={"collection_name": name})
+    assert r.status_code == 201, r.text
+    # 列出
+    r = requests.get(f"{BASE_URL}/api/v1/rag/collections")
+    assert r.status_code == 200
+    names = [c["name"] for c in r.json()["collections"]]
+    assert name in names
+    # 删除
+    r = requests.delete(f"{BASE_URL}/api/v1/rag/collections/{name}")
+    assert r.status_code == 200
+    print("✓ RAG collections lifecycle passed")
+
+
+def test_rag_add_text_and_search():
+    print("\n=== Testing RAG Add Text + Search ===")
+    name = f"qt_text_{int(__import__('time').time())}"
+    requests.post(f"{BASE_URL}/api/v1/rag/collections", json={"collection_name": name})
+    md = "# 工序一\n\n加工内表面螺纹孔，注意扭矩控制。\n\n更多内容文字以确保达到最小词数。"
+    files = {"file": ("doc.md", md.encode("utf-8"), "text/markdown")}
+    r = requests.post(f"{BASE_URL}/api/v1/rag/collections/{name}/text", files=files)
+    assert r.status_code == 200, r.text
+    assert r.json()["chunks_inserted"] > 0
+    # 检索
+    r = requests.get(f"{BASE_URL}/api/v1/rag/collections/{name}/search", params={"query": "螺纹孔", "limit": 3})
+    assert r.status_code == 200, r.text
+    results = r.json()["results"]
+    assert len(results) > 0
+    assert "score" in results[0]
+    requests.delete(f"{BASE_URL}/api/v1/rag/collections/{name}")
+    print("✓ RAG add text + search passed")
+
+
+def test_rag_add_image_and_search_and_asset():
+    print("\n=== Testing RAG Add Image + Search + Asset ===")
+    name = f"qt_img_{int(__import__('time').time())}"
+    requests.post(f"{BASE_URL}/api/v1/rag/collections", json={"collection_name": name})
+    img = Image.new("RGB", (64, 64), color="green")
+    buf = BytesIO(); img.save(buf, format="PNG"); buf.seek(0)
+    files = {"images": ("g.png", buf, "image/png")}
+    data = {"descriptions": "一张绿色测试图", "subject": "capp"}
+    r = requests.post(f"{BASE_URL}/api/v1/rag/collections/{name}/images", files=files, data=data)
+    assert r.status_code == 200, r.text
+    assert r.json()["images_inserted"] == 1
+    # 图像检索
+    buf2 = BytesIO(); img.save(buf2, format="PNG"); buf2.seek(0)
+    files2 = {"image": ("g.png", buf2, "image/png")}
+    r = requests.post(f"{BASE_URL}/api/v1/rag/collections/{name}/search", files=files2, data={"limit": "3"})
+    assert r.status_code == 200, r.text
+    results = r.json()["results"]
+    assert len(results) > 0
+    assert results[0]["type"] == "image"
+    assert results[0]["asset_path"]
+    # asset 取图
+    r = requests.get(f"{BASE_URL}/api/v1/rag/asset", params={"path": results[0]["asset_path"]})
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("image/")
+    requests.delete(f"{BASE_URL}/api/v1/rag/collections/{name}")
+    print("✓ RAG add image + search + asset passed")
+
+
 def main():
     print("=" * 60)
     print("ProcessGen Model Server API Tests")
@@ -524,6 +591,9 @@ def main():
 
     try:
         test_health()
+        test_rag_collections_lifecycle()
+        test_rag_add_text_and_search()
+        test_rag_add_image_and_search_and_asset()
         test_text_embedding()
         test_image_embedding()
         test_fused_embedding()
